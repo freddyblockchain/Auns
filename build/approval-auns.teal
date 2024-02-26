@@ -1,0 +1,168 @@
+#pragma version 8
+
+
+// if Txn.ApplicationID == 0:
+  txn ApplicationID
+  pushint 0
+  ==
+  bz l0_end
+  // then:
+    // Handle Create App
+    // exit(1)
+    pushint 1
+    return
+  l0_end: // end
+
+// switch Txn.OnCompletion:
+txn OnCompletion
+pushint 0 // NoOp
+==
+bnz main
+txn OnCompletion
+pushint 1 // OptIn
+==
+bnz opt_in
+txn OnCompletion
+pushint 2 // CloseOut
+==
+bnz close_out
+txn OnCompletion
+pushint 4 // UpdateApplication
+==
+bnz update_app
+txn OnCompletion
+pushint 5 // DeleteApplication
+==
+bnz delete_app
+err // unexpected value
+
+// block opt_in
+opt_in:
+  // exit(0)
+  pushint 0
+  return
+
+// block close_out
+close_out:
+  // exit(0)
+  pushint 0
+  return
+
+// block update_app
+update_app:
+  // exit(0)
+  pushint 0
+  return
+
+// block delete_app
+delete_app:
+  // exit(0)
+  pushint 0
+  return
+
+// func check_sender_paid(key_length: int, value_length: int):
+__func__check_sender_paid:
+store 1 // value_length
+store 2 // key_length
+// assert(Gtxn[0].Receiver == Global.CurrentApplicationAddress)
+gtxn 0 Receiver
+global CurrentApplicationAddress
+==
+assert
+// int cost = PRICE_PER_BOX + (BOX_MULTIPLIER * (key_length + value_length)) [slot 3]
+pushint 2500 // PRICE_PER_BOX
+pushint 400 // BOX_MULTIPLIER
+load 2 // key_length
+load 1 // value_length
++
+*
++
+store 3 // cost
+// assert(Gtxn[0].Amount >= cost)
+gtxn 0 Amount
+load 3 // cost
+>=
+assert
+// return 1
+pushint 1
+retsub
+
+// block main
+main:
+  // switch Txn.ApplicationArgs[0]:
+  txna ApplicationArgs 0
+  pushbytes "create_aun"
+  ==
+  bnz main__create_aun
+  txna ApplicationArgs 0
+  pushbytes "delete_aun"
+  ==
+  bnz main__delete_aun
+  err // unexpected value
+  
+  // block create_aun
+  main__create_aun:
+    // bytes requested_name = Txn.ApplicationArgs[1] [slot 0]
+    txna ApplicationArgs 1
+    store 0 // requested_name
+    // bytes associated_account = Txn.Sender [slot 1]
+    txn Sender
+    store 1 // associated_account
+    // int box_length [slot 2]
+    
+    // int key_length = len(requested_name) [slot 3]
+    load 0 // requested_name
+    len
+    store 3 // key_length
+    // int value_length = len(associated_account) [slot 4]
+    load 1 // associated_account
+    len
+    store 4 // value_length
+    // check_sender_paid(key_length, value_length)
+    load 3 // key_length
+    load 4 // value_length
+    callsub __func__check_sender_paid
+    
+    // make sure box is empty
+    // box_length, _ = box_get(requested_name)
+    load 0 // requested_name
+    box_get
+    store 2 // box_length
+    pop // discarding value for _
+    // assert(box_length == 0)
+    load 2 // box_length
+    pushint 0
+    ==
+    assert
+    // box_put(Txn.ApplicationArgs[1], Txn.Sender)
+    txna ApplicationArgs 1
+    txn Sender
+    box_put
+    
+    // some statements here
+    //box put
+    // exit(1)
+    pushint 1
+    return
+  
+  // block delete_aun
+  main__delete_aun:
+    // bytes name_to_delete = Txn.ApplicationArgs[1] [slot 0]
+    txna ApplicationArgs 1
+    store 0 // name_to_delete
+    // bytes box_content [slot 1]
+    // _, box_content = box_get(name_to_delete)
+    load 0 // name_to_delete
+    box_get
+    pop // discarding value for _
+    store 1 // box_content
+    // assert(Txn.Sender == box_content)
+    txn Sender
+    load 1 // box_content
+    ==
+    assert
+    // exit(box_del(name_to_delete))
+    load 0 // name_to_delete
+    box_del
+    return
+  
