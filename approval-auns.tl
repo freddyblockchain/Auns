@@ -35,41 +35,36 @@ end
 func check_sender_paid(key_length: int, value_length: int):
     assert(Gtxn[0].Receiver == Global.CurrentApplicationAddress)
     int cost = PRICE_PER_BOX + (BOX_MULTIPLIER * (key_length + value_length))
-    assert(Gtxn[0].Amount >= cost)
+    assert(Gtxn[0].Amount >= (cost * 2))
     return 1
 end
 
 block main:
     switch Txn.ApplicationArgs[0]:
-        "create_aun": create_aun
-        "delete_aun": delete_aun
+        "create_aans": create_aans
     end
 
-    block create_aun:
+    block create_aans:
         bytes requested_name = Txn.ApplicationArgs[1]
         bytes associated_account = Txn.Sender
-        int box_length
+        int box_length_name
+        int box_length_address
 
         int key_length = len(requested_name)
         int value_length = len(associated_account)
         check_sender_paid(key_length, value_length)
 
-        # make sure box is empty
-        box_length, _ = box_get(requested_name) 
-        assert(box_length == 0)
+        # make sure boxes are empty
+        box_length_name, _ = box_get(requested_name) 
+        assert(box_length_name == 0)
+        box_length_address, _ = box_get(associated_account)
+        assert(box_length_address == 0)
+
+        # Add link from name to account, and other way around. 
         box_put(Txn.ApplicationArgs[1], Txn.Sender)
+        box_put(Txn.Sender, Txn.ApplicationArgs[1])
 
-        # some statements here
-        #box put
         exit(1)
-    end
-
-    block delete_aun:
-        bytes name_to_delete = Txn.ApplicationArgs[1]
-        bytes box_content
-        _, box_content = box_get(name_to_delete) 
-        assert(Txn.Sender == box_content)
-        exit(box_del(name_to_delete))
     end
 
 end

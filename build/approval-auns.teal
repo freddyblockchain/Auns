@@ -78,9 +78,11 @@ load 1 // value_length
 *
 +
 store 3 // cost
-// assert(Gtxn[0].Amount >= cost)
+// assert(Gtxn[0].Amount >= (cost * 2))
 gtxn 0 Amount
 load 3 // cost
+pushint 2
+*
 >=
 assert
 // return 1
@@ -91,46 +93,53 @@ retsub
 main:
   // switch Txn.ApplicationArgs[0]:
   txna ApplicationArgs 0
-  pushbytes "create_aun"
+  pushbytes "create_aans"
   ==
-  bnz main__create_aun
-  txna ApplicationArgs 0
-  pushbytes "delete_aun"
-  ==
-  bnz main__delete_aun
+  bnz main__create_aans
   err // unexpected value
   
-  // block create_aun
-  main__create_aun:
+  // block create_aans
+  main__create_aans:
     // bytes requested_name = Txn.ApplicationArgs[1] [slot 0]
     txna ApplicationArgs 1
     store 0 // requested_name
     // bytes associated_account = Txn.Sender [slot 1]
     txn Sender
     store 1 // associated_account
-    // int box_length [slot 2]
+    // int box_length_name [slot 2]
+    // int box_length_address [slot 3]
     
-    // int key_length = len(requested_name) [slot 3]
+    // int key_length = len(requested_name) [slot 4]
     load 0 // requested_name
     len
-    store 3 // key_length
-    // int value_length = len(associated_account) [slot 4]
+    store 4 // key_length
+    // int value_length = len(associated_account) [slot 5]
     load 1 // associated_account
     len
-    store 4 // value_length
+    store 5 // value_length
     // check_sender_paid(key_length, value_length)
-    load 3 // key_length
-    load 4 // value_length
+    load 4 // key_length
+    load 5 // value_length
     callsub __func__check_sender_paid
     
     // make sure box is empty
-    // box_length, _ = box_get(requested_name)
+    // box_length_name, _ = box_get(requested_name)
     load 0 // requested_name
     box_get
-    store 2 // box_length
+    store 2 // box_length_name
     pop // discarding value for _
-    // assert(box_length == 0)
-    load 2 // box_length
+    // assert(box_length_name == 0)
+    load 2 // box_length_name
+    pushint 0
+    ==
+    assert
+    // box_length_address, _ = box_get(associated_account)
+    load 1 // associated_account
+    box_get
+    store 3 // box_length_address
+    pop // discarding value for _
+    // assert(box_length_address == 0)
+    load 3 // box_length_address
     pushint 0
     ==
     assert
@@ -138,31 +147,12 @@ main:
     txna ApplicationArgs 1
     txn Sender
     box_put
+    // box_put(Txn.Sender, Txn.ApplicationArgs[1])
+    txn Sender
+    txna ApplicationArgs 1
+    box_put
     
-    // some statements here
-    //box put
     // exit(1)
     pushint 1
-    return
-  
-  // block delete_aun
-  main__delete_aun:
-    // bytes name_to_delete = Txn.ApplicationArgs[1] [slot 0]
-    txna ApplicationArgs 1
-    store 0 // name_to_delete
-    // bytes box_content [slot 1]
-    // _, box_content = box_get(name_to_delete)
-    load 0 // name_to_delete
-    box_get
-    pop // discarding value for _
-    store 1 // box_content
-    // assert(Txn.Sender == box_content)
-    txn Sender
-    load 1 // box_content
-    ==
-    assert
-    // exit(box_del(name_to_delete))
-    load 0 // name_to_delete
-    box_del
     return
   
